@@ -1,0 +1,1 @@
+git+https://github.com/tarik-sen/fimage.git@main#egg=fimage
