@@ -1,7 +1,10 @@
+import argparse
+from multiprocessing import Value
 import os
 import shutil
 import csv
 import random
+from tqdm import tqdm
 from fimage import FImage
 from fimage.filters import Contrast, Brightness, Saturation, Hue, Exposure
 from torchvision.datasets import CIFAR10
@@ -26,7 +29,20 @@ def prepare_cifar_images(input_dir, num_images=1000):
 
     shutil.rmtree(temp_dir)
 
-def process_images(input_dir, output_dir, metadata_path):
+def get_img_paths(input_dir, recursive):
+    image_paths = []
+    if recursive:
+        for root, _, files in os.walk(input_dir):
+            for file in files:
+                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    image_paths.append(os.path.join(root, file))
+    else:
+        image_paths = [os.path.join(input_dir, f) for f in os.listdir(dir)
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+
+    return image_paths
+
+def process_images(input_dir, output_dir, metadata_path, recursive=False):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
@@ -34,10 +50,15 @@ def process_images(input_dir, output_dir, metadata_path):
         writer = csv.DictWriter(csvfile, fieldnames=['Id'] + list(FILTERS.keys()))
         writer.writeheader()
         
-        image_files = [f for f in os.listdir(input_dir)]
-        for img_file in image_files:    
+        image_paths = get_img_paths(input_dir, recursive)
+
+        progress_bar = tqdm(image_paths, desc="Applying filters", unit="image")
+
+        weird_images = 0
+
+        for img_path in progress_bar:    
             keep_clean = random.random() < 0.2        
-            csv_row = {'Id': img_file, **{filter_name: 0 for filter_name in FILTERS}}
+            csv_row = {'Id': img_path, **{filter_name: 0 for filter_name in FILTERS}}
 
             filters_to_apply = []
             
@@ -48,30 +69,65 @@ def process_images(input_dir, output_dir, metadata_path):
                         csv_row[filter_name] = value
                         filters_to_apply.append(filter_class(value))
             
-            image = FImage(os.path.join(input_dir, img_file))
+            image = FImage(img_path)
+
+            filter_blew_up = False
             for filter_obj in filters_to_apply:
-                image.apply(filter_obj)
+                try:
+                    image.apply(filter_obj)
+                except ValueError:
+                    # TODO: proper logging?
+                    # Saturation filter blows up on some images
+                    # print(f"Something blew up in {filter_obj}")
+                    filter_blew_up = True
+                    weird_images += 1
+                    break
+
+            if filter_blew_up:
+                continue
             
-            image.save(os.path.join(output_dir, img_file))
-            
+            rel_path = os.path.relpath(img_path, input_dir)
+            output_path = os.path.join(output_dir, rel_path)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            # some weird image mode in some weird jpegs blow up image saving so...
+            if image.original_image.mode != "RGB":
+                image = image.original_image.convert("RGB")
+
+            image.save(output_path)
+
             writer.writerow(csv_row)
             
-            if image_files.index(img_file) % 100 == 0:
-                print(f"Processed {image_files.index(img_file)}/{len(image_files)} images")
+            if image_paths.index(img_path) % 100 == 0:
+                pass
+                # print(f"Processed {image_paths.index(img_path)}/{len(image_paths)} images")
     
-    print(f"Processing complete. Processed {len(image_files)} images.")
+    print(f"Processing complete. Processed {len(image_paths) - weird_images} images.")
+    print(f"{weird_images} images could not be processed for some odd reason.")
     print(f"Results saved to {output_dir}")
     print(f"Metadata saved to {metadata_path}")
 
 def main():
-    input_directory = '../data/images'
-    output_directory = '../results/images'
-    csv_file = '../results/metadata.csv'
-    
-    print("Downloading CIFAR-10 images...")
-    prepare_cifar_images(input_directory)
+    parser = argparse.ArgumentParser(description="Apply filters to image datasets")
+    parser.add_argument("--input-dir", type=str, help="Path to input image directory")
+    parser.add_argument("--output-dir", type=str, default='../results/images', help="Path to directory to save processed images")
+    parser.add_argument("--dataset", type=str, choices=["cifar10"], help="Use torchvision datasets for input images")
+    parser.add_argument("--num-images", type=int, default=1000, help="Number of images to use from dataset if --dataset is provided")
+    parser.add_argument('--metadata', type=str, default='../results/metadata.csv', help="Path to CSV file to store filter metadata")
+    parser.add_argument("-r", '--recursive', action="store_true", help="Recursively search for images in subdirectories of input directory")
 
-    process_images(input_directory, output_directory, csv_file)
+    args = parser.parse_args()
+
+    if not args.input_dir and not args.dataset:
+        raise ValueError("You must provide either --input-dir or --dataset")
+
+    input_dir = args.input_dir or "../data/temp_input"
+
+    if args.dataset:
+        print(f"Downloading dataset: {args.dataset}")
+        prepare_cifar_images(input_dir, num_images=args.num_images)
+
+    process_images(input_dir, args.output_dir, args.metadata, args.recursive)
 
 if __name__ == "__main__":
     main()
