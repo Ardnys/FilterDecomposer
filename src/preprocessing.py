@@ -10,11 +10,11 @@ from fimage.filters import Contrast, Brightness, Saturation, Hue, Exposure
 from torchvision.datasets import CIFAR10
 
 FILTERS = {
-    'Contrast': Contrast,
-    'Brightness': Brightness, 
-    'Saturation': Saturation,
-    'Hue': Hue,
-    'Exposure': Exposure
+    'Contrast': (Contrast, (0, 50)),
+    'Brightness': (Brightness, (0, 30)),
+    'Saturation': (Saturation, (10, 60)),
+    'Hue': (Hue, (0, 20)),
+    'Exposure': (Exposure, (0, 10)),
 }
 
 def prepare_cifar_images(input_dir, num_images=1000):
@@ -29,7 +29,7 @@ def prepare_cifar_images(input_dir, num_images=1000):
 
     shutil.rmtree(temp_dir)
 
-def get_img_paths(input_dir, recursive):
+def get_img_paths(input_dir, recursive=False):
     image_paths = []
     if recursive:
         for root, _, files in os.walk(input_dir):
@@ -37,7 +37,7 @@ def get_img_paths(input_dir, recursive):
                 if file.lower().endswith(('.png', '.jpg', '.jpeg')):
                     image_paths.append(os.path.join(root, file))
     else:
-        image_paths = [os.path.join(input_dir, f) for f in os.listdir(dir)
+        image_paths = [os.path.join(input_dir, f) for f in os.listdir(input_dir)
                         if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
     return image_paths
@@ -55,52 +55,34 @@ def process_images(input_dir, output_dir, metadata_path, recursive=False):
         progress_bar = tqdm(image_paths, desc="Applying filters", unit="image")
 
         weird_images = 0
-
         for img_path in progress_bar:    
-            keep_clean = random.random() < 0.2        
             csv_row = {'Id': img_path, **{filter_name: 0 for filter_name in FILTERS}}
 
             filters_to_apply = []
-            
-            if not keep_clean:
-                for filter_name, filter_class in FILTERS.items():
-                    if random.random() < 0.5:
-                        value = random.randint(0, 85)
-                        csv_row[filter_name] = value
-                        filters_to_apply.append(filter_class(value))
+            for filter_name, (filter_class, (min, max)) in FILTERS.items():
+                if random.random() < 0.5:
+                    value = random.randint(min, max)
+                    csv_row[filter_name] = value
+                    filters_to_apply.append(filter_class(value))
             
             image = FImage(img_path)
 
-            filter_blew_up = False
-            for filter_obj in filters_to_apply:
-                try:
+            try:
+                for filter_obj in filters_to_apply:
                     image.apply(filter_obj)
-                except ValueError:
-                    # TODO: proper logging?
-                    # Saturation filter blows up on some images
-                    # print(f"Something blew up in {filter_obj}")
-                    filter_blew_up = True
-                    weird_images += 1
-                    break
-
-            if filter_blew_up:
+            except ValueError:
+                weird_images += 1
                 continue
             
             rel_path = os.path.relpath(img_path, input_dir)
             output_path = os.path.join(output_dir, rel_path)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-            # some weird image mode in some weird jpegs blow up image saving so...
             if image.original_image.mode != "RGB":
                 image = image.original_image.convert("RGB")
 
             image.save(output_path)
-
             writer.writerow(csv_row)
-            
-            if image_paths.index(img_path) % 100 == 0:
-                pass
-                # print(f"Processed {image_paths.index(img_path)}/{len(image_paths)} images")
     
     print(f"Processing complete. Processed {len(image_paths) - weird_images} images.")
     print(f"{weird_images} images could not be processed for some odd reason.")
@@ -121,7 +103,7 @@ def main():
     if not args.input_dir and not args.dataset:
         raise ValueError("You must provide either --input-dir or --dataset")
 
-    input_dir = args.input_dir or "../data/temp_input"
+    input_dir = args.input_dir or "../data/images"
 
     if args.dataset:
         print(f"Downloading dataset: {args.dataset}")
