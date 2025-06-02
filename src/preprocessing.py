@@ -6,16 +6,24 @@ import csv
 import random
 from tqdm import tqdm
 from fimage import FImage
-from fimage.filters import Contrast, Brightness, Saturation, Hue, Exposure
+from fimage.filters import Contrast, Brightness, Saturation, Hue, Exposure, Grayscale, Sepia, Sharpen, Vibrance, Noise
 from torchvision.datasets import CIFAR10
 
 FILTERS = {
-    'Contrast': (Contrast, (0, 50)),
-    'Brightness': (Brightness, (0, 30)),
-    'Saturation': (Saturation, (10, 60)),
-    'Hue': (Hue, (0, 20)),
-    'Exposure': (Exposure, (0, 10)),
+    'Contrast': (Contrast, (10, 75)),
+    'Brightness': (Brightness, (5, 30)),
+    'Saturation': (Saturation, (10, 100)),
+    'Hue': (Hue, (0, 100)),
+    'Exposure': (Exposure, (10, 30)),
+    'Vibrance': (Vibrance, (20, 100)),
+    'Pale': (Vibrance, (-100, -20)),
+    'Sepia': (Sepia, (15, 100)),
+    'Sharpen': (Sharpen, (10, 75)),
+    'Noise': (Noise, (1, 30)),
+    # 'Grayscale': (Grayscale, (0, 1)), on or off
 }
+
+# TODO: maybe using presets?
 
 def prepare_cifar_images(input_dir: Path, num_images=1000):
     os.makedirs(input_dir, exist_ok=True)
@@ -79,7 +87,7 @@ def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recur
             for i in range(1, filter_per_image+1):
                 try:
                     apply_filter(img_path, input_dir, output_dir, writer, i)
-                except ValueError:
+                except ValueError as e:
                     weird_images += 1
     
     print(f"Processing complete. Processed {len(image_paths) - weird_images} images.")
