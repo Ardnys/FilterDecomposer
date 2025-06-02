@@ -35,8 +35,34 @@ def get_img_paths(input_dir: Path, recursive=False):
     else:
         return list(input_dir.glob("*.png")) + list(input_dir.glob("*.jpg")) + list(input_dir.glob("*.jpeg"))
 
+def apply_filter(img_path: Path, input_dir: Path, output_dir: Path, writer: csv.DictWriter, idx):
+    rel_path = img_path.relative_to(input_dir)
+    rel_path = rel_path.with_name(f"{rel_path.stem}_v{idx}{rel_path.suffix}")
+    output_path = output_dir / rel_path
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recursive=False):
+    csv_row = {'Id': str(rel_path), **{filter_name: 0 for filter_name in FILTERS}}
+
+    filters_to_apply = []
+    for filter_name, (filter_class, (min_val, max_val)) in FILTERS.items():
+        if random.random() < 0.5:
+            value = random.randint(min_val, max_val)
+            csv_row[filter_name] = value
+            filters_to_apply.append(filter_class(value))
+
+
+    image = FImage(img_path)
+
+    for filter_obj in filters_to_apply:
+        image.apply(filter_obj)
+
+    if image.original_image.mode != "RGB":
+        image = image.original_image.convert("RGB")
+
+    image.save(output_path)
+    writer.writerow(csv_row)
+
+def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recursive=False, filter_per_image=1):
     output_dir.mkdir(parents=True, exist_ok=True)
     
     with open(metadata_path, 'w', newline='', encoding='utf-8') as csvfile:
@@ -49,34 +75,11 @@ def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recur
 
         weird_images = 0
         for img_path in progress_bar:    
-            rel_path = img_path.relative_to(input_dir)
-            output_path = output_dir / rel_path
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-            csv_row = {'Id': str(rel_path), **{filter_name: 0 for filter_name in FILTERS}}
-
-            filters_to_apply = []
-            for filter_name, (filter_class, (min_val, max_val)) in FILTERS.items():
-                if random.random() < 0.5:
-                    value = random.randint(min_val, max_val)
-                    csv_row[filter_name] = value
-                    filters_to_apply.append(filter_class(value))
-            
-            image = FImage(img_path)
-
-            try:
-                for filter_obj in filters_to_apply:
-                    image.apply(filter_obj)
-            except ValueError:
-                weird_images += 1
-                continue
-            
-
-            if image.original_image.mode != "RGB":
-                image = image.original_image.convert("RGB")
-
-            image.save(output_path)
-            writer.writerow(csv_row)
+            for i in range(1, filter_per_image+1):
+                try:
+                    apply_filter(img_path, input_dir, output_dir, writer, i)
+                except ValueError:
+                    weird_images += 1
     
     print(f"Processing complete. Processed {len(image_paths) - weird_images} images.")
     print(f"{weird_images} images could not be processed for some odd reason.")
@@ -85,11 +88,12 @@ def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recur
 
 def main():
     parser = argparse.ArgumentParser(description="Apply filters to image datasets")
-    parser.add_argument("--input-dir", type=Path, help="Path to input image directory")
-    parser.add_argument("--output-dir", type=Path, default=Path('./results/images'), help="Path to directory to save processed images")
+    parser.add_argument("-i", "--input-dir", type=Path, help="Path to input image directory")
+    parser.add_argument("-o", "--output-dir", type=Path, default=Path('./results/images'), help="Path to directory to save processed images")
     parser.add_argument('--metadata', type=Path, default=Path('./results/metadata.csv'), help="Path to CSV file to store filter metadata")
     parser.add_argument("--dataset", type=str, choices=["cifar10"], help="Use torchvision datasets for input images")
     parser.add_argument("--num-images", type=int, default=1000, help="Number of images to use from dataset if --dataset is provided")
+    parser.add_argument("-f", "--filters-per-image", type=int, default=1, help="Number of filter combinations to apply per image")
     parser.add_argument("-r", '--recursive', action="store_true", help="Recursively search for images in subdirectories of input directory")
 
     args = parser.parse_args()
@@ -103,7 +107,7 @@ def main():
         print(f"Downloading dataset: {args.dataset}")
         prepare_cifar_images(input_dir, num_images=args.num_images)
 
-    process_images(input_dir, args.output_dir, args.metadata, args.recursive)
+    process_images(input_dir, args.output_dir, args.metadata, args.recursive, args.filters_per_image)
 
 if __name__ == "__main__":
     main()
