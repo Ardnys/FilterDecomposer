@@ -16,7 +16,7 @@ FILTERS = {
     'Hue': (Hue, (0, 100)),
     'Exposure': (Exposure, (10, 30)),
     'Vibrance': (Vibrance, (20, 100)),
-    'Pale': (Vibrance, (-100, -20)),
+    # 'Pale': (Vibrance, (-100, -20)),
     'Sepia': (Sepia, (15, 100)),
     'Sharpen': (Sharpen, (10, 75)),
     'Noise': (Noise, (1, 30)),
