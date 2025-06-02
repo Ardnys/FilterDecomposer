@@ -39,7 +39,8 @@ def apply_filter(img_path: Path, input_dir: Path, output_dir: Path, writer: csv.
     rel_path = img_path.relative_to(input_dir)
     rel_path = rel_path.with_name(f"{rel_path.stem}_v{idx}{rel_path.suffix}")
     output_path = output_dir / rel_path
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # recursively create subfolders
+    os.makedirs(output_path.parent, exist_ok=True)
 
     csv_row = {'Id': str(rel_path), **{filter_name: 0 for filter_name in FILTERS}}
 
