@@ -38,9 +38,9 @@ FILTER_MAP = {
     'Noise': (Noise, (1, 30)),
 }
 
-device = torch.device('cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = MultiOutputEfficientNet(list(FILTER_MAP.keys()))
-model.load_state_dict(torch.load('../results/fildec.pt', map_location=device, weights_only=True))
+model.load_state_dict(torch.load('./models/fildec.pt', weights_only=True))
 model.to(device)
 model.eval()
 
@@ -60,6 +60,8 @@ def apply_random_filtering(img_path: Path, output_dir: Path):
         image = image.original_image.convert("RGB")
     
     image.save(output_dir / img_path.name)
+
+    return output_dir / img_path.name
 
 def apply_model_filtering(model, img_path: Path, output_dir: Path):
     os.makedirs(output_dir, exist_ok=True)
@@ -115,8 +117,8 @@ def pipeline(img_path):
         filtered_path = temp_dir / "filtered"
         predicted_path = temp_dir / "predicted_filtered"
 
-        apply_random_filtering(img_path, filtered_path)
-        apply_model_filtering(model, img_path, predicted_path)
+        p = apply_random_filtering(img_path, filtered_path)
+        apply_model_filtering(model, p, predicted_path)
 
         original = load_image(img_path)
         filtered = load_image(filtered_path / img_path.name)

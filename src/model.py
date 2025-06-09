@@ -38,16 +38,15 @@ class MultiOutputEfficientNet(nn.Module):
         self.filter_heads = nn.ModuleDict()
         for i in range(num_filters):
             self.filter_heads[self.filter_names[i]] = nn.Sequential(
-                nn.Linear(in_features, 256),
+                nn.Linear(in_features, 128),
                 nn.ReLU(inplace=True),
                 nn.Dropout(dropout_rate),
                 
-                nn.Linear(256, 128),
+                nn.Linear(128, 64),
                 nn.ReLU(inplace=True),
                 nn.Dropout(dropout_rate * 0.5),
                 
-                nn.Linear(128, 1),
-                nn.Sigmoid()
+                nn.Linear(64, 1)
             )
     
     def forward(self, x):
