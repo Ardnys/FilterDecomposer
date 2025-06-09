@@ -8,6 +8,7 @@
 # Data
 /data/
 /results/
+/images/
 
 # User-specific stuff
 .idea/**/workspace.xml
