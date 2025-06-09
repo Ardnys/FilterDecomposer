@@ -6,8 +6,12 @@ import csv
 import random
 from tqdm import tqdm
 from fimage import FImage
+from fimage.image_array import ImageArray
 from fimage.filters import Contrast, Brightness, Saturation, Hue, Exposure, Grayscale, Sepia, Sharpen, Vibrance, Noise
 from torchvision.datasets import CIFAR10
+from PIL import Image, ImageOps
+import numpy as np
+from typing import Tuple, Optional
 
 FILTERS = {
     'Contrast': (Contrast, (10, 75)),
@@ -43,7 +47,15 @@ def get_img_paths(input_dir: Path, recursive=False):
     else:
         return list(input_dir.glob("*.png")) + list(input_dir.glob("*.jpg")) + list(input_dir.glob("*.jpeg"))
 
-def apply_filter(img_path: Path, input_dir: Path, output_dir: Path, writer: csv.DictWriter, idx):
+# temporary hack to gain speed. this should be moved to FImage library
+def resize_fimage(fimage: FImage, resize_to: Tuple[int, int]):
+    fimage.original_image = fimage.original_image.resize(resize_to, Image.LANCZOS)
+    fimage.image = ImageOps.exif_transpose(fimage.original_image)
+    fimage.exif_data = fimage.image.getexif()
+    fimage.image_array = ImageArray(np.array(fimage.image))
+
+
+def apply_filter(img_path: Path, input_dir: Path, output_dir: Path, writer: csv.DictWriter, idx, resize_to:Optional[Tuple[int, int]] = None) :
     rel_path = img_path.relative_to(input_dir)
     rel_path = rel_path.with_name(f"{rel_path.stem}_v{idx}{rel_path.suffix}")
     output_path = output_dir / rel_path
@@ -62,6 +74,9 @@ def apply_filter(img_path: Path, input_dir: Path, output_dir: Path, writer: csv.
 
     image = FImage(img_path)
 
+    if resize_to:
+        resize_fimage(image, resize_to)
+
     for filter_obj in filters_to_apply:
         image.apply(filter_obj)
 
@@ -71,12 +86,19 @@ def apply_filter(img_path: Path, input_dir: Path, output_dir: Path, writer: csv.
     image.save(output_path)
     writer.writerow(csv_row)
 
-def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recursive=False, filter_per_image=1):
+def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recursive=False, filter_per_image=1, resize=False):
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    with open(metadata_path, 'w', newline='', encoding='utf-8') as csvfile:
+    exist = False
+    if os.path.exists(metadata_path):
+        # just append without writing header
+        # this so that i can add other datasets later
+        exist = True
+
+    with open(metadata_path, 'a', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=['Id'] + list(FILTERS.keys()))
-        writer.writeheader()
+        if not exist:
+            writer.writeheader()
         
         image_paths = get_img_paths(input_dir, recursive)
 
@@ -86,7 +108,7 @@ def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recur
         for img_path in progress_bar:    
             for i in range(1, filter_per_image+1):
                 try:
-                    apply_filter(img_path, input_dir, output_dir, writer, i)
+                    apply_filter(img_path, input_dir, output_dir, writer, i, resize)
                 except ValueError as e:
                     weird_images += 1
     
@@ -94,6 +116,13 @@ def process_images(input_dir: Path, output_dir: Path, metadata_path: Path, recur
     print(f"{weird_images} images could not be processed for some odd reason.")
     print(f"Results saved to {output_dir}")
     print(f"Metadata saved to {metadata_path}")
+
+def parse_tuple(s: str) -> Tuple[int, int]:
+    parts = s.split(',')
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError("Tuple must be in 'x,y' format")
+    return tuple(int(x) for x in parts)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Apply filters to image datasets")
@@ -104,6 +133,7 @@ def main():
     parser.add_argument("--num-images", type=int, default=1000, help="Number of images to use from dataset if --dataset is provided")
     parser.add_argument("-f", "--filters-per-image", type=int, default=1, help="Number of filter combinations to apply per image")
     parser.add_argument("-r", '--recursive', action="store_true", help="Recursively search for images in subdirectories of input directory")
+    parser.add_argument("-s", '--resize', type=parse_tuple, help="Resize images to a new size, e.g. 480,480")
 
     args = parser.parse_args()
 
@@ -116,7 +146,7 @@ def main():
         print(f"Downloading dataset: {args.dataset}")
         prepare_cifar_images(input_dir, num_images=args.num_images)
 
-    process_images(input_dir, args.output_dir, args.metadata, args.recursive, args.filters_per_image)
+    process_images(input_dir, args.output_dir, args.metadata, args.recursive, args.filters_per_image, args.resize)
 
 if __name__ == "__main__":
     main()
