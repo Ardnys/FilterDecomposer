@@ -61,7 +61,7 @@ def apply_random_filtering(img_path: Path, output_dir: Path):
     
     image.save(output_dir / img_path.name)
 
-def apply_model_filtering(model, img_path: Path, output_dir: Path):
+def apply_model_filtering(model, img_path: Path, filtered_path: Path, output_dir: Path):
     os.makedirs(output_dir, exist_ok=True)
 
     model.eval()
@@ -72,8 +72,8 @@ def apply_model_filtering(model, img_path: Path, output_dir: Path):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    image = Image.open(img_path).convert("RGB")
-    input_tensor = transform(image).unsqueeze(0).to(device)
+    filtered_image = Image.open(filtered_path / img_path.name).convert("RGB")
+    input_tensor = transform(filtered_image).unsqueeze(0).to(device)
 
     with torch.inference_mode():
         pred = model(input_tensor).squeeze(0).cpu().numpy()
@@ -116,7 +116,7 @@ def pipeline(img_path):
         predicted_path = temp_dir / "predicted_filtered"
 
         apply_random_filtering(img_path, filtered_path)
-        apply_model_filtering(model, img_path, predicted_path)
+        apply_model_filtering(model, img_path, filtered_path, predicted_path)
 
         original = load_image(img_path)
         filtered = load_image(filtered_path / img_path.name)
