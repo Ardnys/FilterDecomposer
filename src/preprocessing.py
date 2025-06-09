@@ -20,13 +20,13 @@ FILTERS = {
     'Hue': (Hue, (0, 100)),
     'Exposure': (Exposure, (10, 30)),
     'Vibrance': (Vibrance, (20, 100)),
-    # 'Pale': (Vibrance, (-100, -20)),
     'Sepia': (Sepia, (15, 100)),
     'Sharpen': (Sharpen, (10, 75)),
     'Noise': (Noise, (1, 30)),
-    # 'Grayscale': (Grayscale, (0, 1)), on or off
 }
 
+# 'Pale': (Vibrance, (-100, -20)),
+# 'Grayscale': (Grayscale, (0, 1)), on or off
 # TODO: maybe using presets?
 
 def prepare_cifar_images(input_dir: Path, num_images=1000):
