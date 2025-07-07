@@ -126,6 +126,7 @@ def process_images(
     input_dir: Path,
     output_dir: Path,
     metadata_path: Path,
+    jobs: int,
     recursive=False,
     filter_per_image=1,
     resize=False,
@@ -142,7 +143,7 @@ def process_images(
         for i in range(1, filter_per_image + 1):
             tasks.append((img_path, input_dir, output_dir, i, resize))
 
-    with Pool(processes=8) as pool:
+    with Pool(processes=jobs) as pool:
         csv_rows = list(
             tqdm(
                 pool.imap_unordered(huh, tasks, chunksize=16),
@@ -208,6 +209,13 @@ def main():
         help="Number of filter combinations to apply per image",
     )
     parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=1,
+        help="Number of threads to run in parallel",
+    )
+    parser.add_argument(
         "-r",
         "--recursive",
         action="store_true",
@@ -235,6 +243,7 @@ def main():
         input_dir,
         args.output_dir,
         args.metadata,
+        args.jobs,
         args.recursive,
         args.filters_per_image,
         args.resize,
