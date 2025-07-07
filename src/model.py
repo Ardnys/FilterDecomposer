@@ -19,11 +19,21 @@ from torchvision.models import efficientnet_b2, EfficientNet_B2_Weights
 from tqdm import tqdm
 from fimage import FImage
 from fimage.filters import (
-    Brightness, Contrast, Exposure, Grayscale, Hue,
-    Noise, Posterize, Saturation, Sepia, Sharpen, Vibrance
+    Brightness,
+    Contrast,
+    Exposure,
+    Grayscale,
+    Hue,
+    Noise,
+    Posterize,
+    Saturation,
+    Sepia,
+    Sharpen,
+    Vibrance,
 )
 
 NUM_FILTERS = 9
+
 
 class MultiOutputEfficientNet(nn.Module):
     def __init__(self, filter_names, num_filters=NUM_FILTERS, dropout_rate=0.3):
@@ -34,26 +44,24 @@ class MultiOutputEfficientNet(nn.Module):
         self.base_model.classifier = nn.Identity()
 
         self.filter_names = filter_names
-        
+
         self.filter_heads = nn.ModuleDict()
         for i in range(num_filters):
             self.filter_heads[self.filter_names[i]] = nn.Sequential(
                 nn.Linear(in_features, 128),
                 nn.ReLU(inplace=True),
                 nn.Dropout(dropout_rate),
-                
                 nn.Linear(128, 64),
                 nn.ReLU(inplace=True),
                 nn.Dropout(dropout_rate * 0.5),
-                
-                nn.Linear(64, 1)
+                nn.Linear(64, 1),
             )
-    
+
     def forward(self, x):
         features = self.base_model(x)
-        
+
         outputs = []
         for head in self.filter_heads.values():
             outputs.append(head(features))
-        
+
         return torch.cat(outputs, dim=1)
