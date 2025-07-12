@@ -118,7 +118,7 @@ def apply_filter(
     return csv_row
 
 
-def huh(args):
+def filter_applier(args):
     return apply_filter(*args)
 
 
@@ -146,7 +146,7 @@ def process_images(
     with Pool(processes=jobs) as pool:
         csv_rows = list(
             tqdm(
-                pool.imap_unordered(huh, tasks, chunksize=16),
+                pool.imap_unordered(filter_applier, tasks, chunksize=16),
                 total=len(tasks),
                 desc="Applying filters",
             )
